@@ -192,6 +192,17 @@ abstract class Shader<TVertex, TUniform> : Shader, IComparer<TUniform> where TVe
    /// DrawArrays call. How do we distinguish between the two types of RBatch? This indexed-drawing
    /// RBatch has a non-zero ICount value.
    public void Draw (ReadOnlySpan<TVertex> data, ReadOnlySpan<int> indices) {
+      // WebGL2: the 'expanded' pipelines (ShaderImp.Expand > 0, the geometry-shader
+      // replacements) draw as instanced quads whose per-instance attribute fetch is
+      // strictly linear - an index buffer cannot drive it. Resolve the indices into a
+      // flat vertex list instead (this is retained-mode data, so it only happens when
+      // the mesh is rebuilt, not per frame).
+      if (Pgm.Expand > 0) {
+         var flat = new TVertex[indices.Length];
+         for (int i = 0; i < indices.Length; i++) flat[i] = data[indices[i]];
+         Draw (flat);
+         return;
+      }
       ref RBatch rb = ref RBatch.Alloc ();
       VNode vnode = Lux.VNode!;
       rb.IDVNode = (ushort)vnode.Id;

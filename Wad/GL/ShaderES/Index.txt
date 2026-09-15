@@ -1,0 +1,35 @@
+Name           Sort  Mode         VSpec              Blend  Depth  POffset  Stencil  Programs                              Expand  Sub
+-----------------------------------------------------------------------------------------------------------------------------------
+Line2D            1  Lines        Vec2F              1      0      0        None     Line2D.vert|Line.frag                 2
+Bezier2D          2  Lines        Vec2F              1      0      0        None     Bezier2D.vert|Line.frag               4     64
+DashLine2D       13  Lines        Vec2F              1      0      0        None     DashLine2D.vert|DashLine.frag         2
+DashBezier2D     24  Lines        Vec2F              1      0      0        None     DashBezier2D.vert|DashLine.frag       4     64
+Point2D           3  Points       Vec2F              1      0      0        None     Point2D.vert|Point.frag               1
+LinePx           15  Lines        Vec2S              1      0      0        None     Pixel.vert|Flat.frag                  0
+PointPx          16  Points       Vec2S_Vec4F        1      0      0        None     PixelColor.vert|Color.frag            0
+Triangle2D        5  Triangles    Vec2F              0      0      0        None     World2D.vert|Flat.frag                0
+TrianglePx       17  Triangles    Vec2S              1      0      0        None     Pixel.vert|Flat.frag                  0
+Quad2D            6  Quads        Vec2F              0      0      0        None     World2D.vert|Flat.frag                0
+QuadPx           18  Quads        Vec2S              1      0      0        None     Pixel.vert|Flat.frag                  0
+TriFanCover     105  TriangleFan  Vec2F              0      0      0        Cover    World2D.vert|Flat.frag                0
+TriFanStencil    14  TriangleFan  Vec2F              0      0      0        Stencil  World2D.vert|Flat.frag                0
+UIRect           23  TriangleFan  UIRect             2      0      0        None     UIRect.vert|UIRect.frag               0
+TextPx          104  Points       Vec4S_Int          1      0      0        None     TextPx.vert|Text.frag                 1
+Text2D          106  Points       Vec2F_Vec4S_Int    1      0      0        None     Text2D.vert|Text.frag                 1
+Text3D          107  Points       Vec3F_Vec4S_Int    1      1      0        None     Text3D.vert|Text.frag                 1
+RectPx           18  Points       Vec4S              1      0      0        None     Rect.vert|Flat.frag                   1
+RectBorderPx     19  Points       Vec4S_Short        1      0      0        None     RectBorder.vert|RectBorder.frag       1
+RRectPx          20  Points       Vec4S_Short        1      0      0        None     RRect.vert|RRect.frag                 1
+RRectBorderPx    21  Points       Vec4S_Short_Short  1      0      0        None     RRectBorder.vert|RRectBorder.frag     1
+DeePx            22  Points       Vec4S_Short_Short  1      0      0        None     Dee.vert|Dee.frag                     1
+Line3D          101  Lines        Vec3F              1      1      0        None     Line3D.vert|Line.frag                 2
+Point3D           4  Points       Vec3F              1      0      0        None     Point3D.vert|Point.frag               1
+BlackLine       102  Lines        Vec3F_Vec3H        1      1      0        None     Line3DN.vert|Line.frag                2
+GlassLine       103  Lines        Vec3F_Vec3H        1      1      0        None     Line3DN.vert|GlassLine.frag           2
+Gourad            7  Triangles    Vec3F_Vec3H        0      1      1        None     Gourad.vert|Gourad.frag               0
+Phong             8  Triangles    Vec3F_Vec3H        0      1      1        None     Phong.vert|Phong.frag                 0
+PhongPink         9  Triangles    Vec3F_Vec3H        0      1      1        None     Phong.vert|PhongPink.frag             0
+Pick             10  Triangles    Vec3F_Vec3H        0      1      1        None     FlatFacet.vert|Pick.frag              0
+Glass            11  Triangles    Vec3F_Vec3H        0      1      1        None     Gourad.vert|Glass.frag                0
+FlatFacet        12  Triangles    Vec3F_Vec3H        0      1      1        None     FlatFacet.vert|FlatFacet.frag         0
+Decal           108  Quads        Vec3F_Vec3H_Vec2F  1      1      0        None     Decal.vert|Decal.frag                 0

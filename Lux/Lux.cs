@@ -330,6 +330,7 @@ public static partial class Lux {
          if (mFrameBuffer == 0) {
             mFrameBuffer = GL.GenFrameBuffer ();
             mColorBuffer = GL.GenRenderBuffer (); mDepthBuffer = GL.GenRenderBuffer ();
+            if (OperatingSystem.IsBrowser ()) mPickDepthColorBuffer = GL.GenRenderBuffer ();
          }
          GL.BindFrameBuffer (EFrameBufferTarget.DrawAndRead, mFrameBuffer);
          if (viewport.X > mFBSize.X || viewport.Y > mFBSize.Y) {
@@ -340,17 +341,28 @@ public static partial class Lux {
             GL.RenderBufferStorage (ERenderBufferFormat.Depth24Stencil8, viewport.X, viewport.Y);
             GL.FrameBufferRenderBuffer (EFrameBufferTarget.DrawAndRead, EFrameBufferAttachment.Color0, mColorBuffer);
             GL.FrameBufferRenderBuffer (EFrameBufferTarget.DrawAndRead, EFrameBufferAttachment.DepthStencil, mDepthBuffer);
+            if (OperatingSystem.IsBrowser ()) {
+               // WebGL2 cannot read the depth buffer back, so picking gets a second color
+               // attachment carrying RGBA-packed depth (written by the ES Pick.frag)
+               GL.BindRenderBuffer (ERenderBufferTarget.RenderBuffer, mPickDepthColorBuffer);
+               GL.RenderBufferStorage (ERenderBufferFormat.RGBA8, viewport.X, viewport.Y);
+               GL.FrameBufferRenderBuffer (EFrameBufferTarget.DrawAndRead, EFrameBufferAttachment.Color1, mPickDepthColorBuffer);
+            }
             if (GL.CheckFrameBufferStatus (EFrameBufferTarget.Draw) != EFrameBufferStatus.Complete)
                throw new NotImplementedException ();
          }
+         // On the browser, the pick pass draws into both color attachments (id + depth)
+         if (OperatingSystem.IsBrowser ()) GL.DrawBuffers (target == ETarget.Pick ? 2 : 1);
       } else
          GL.BindFrameBuffer (EFrameBufferTarget.DrawAndRead, 0);
    }
    static Vec2S mFBViewport;            // Viewport size, when rendering to a frame-buffer
    static HFrameBuffer mFrameBuffer;    // Frame-buffer for image rendering
    static HRenderBuffer mColorBuffer, mDepthBuffer;    // Render buffers for the same
+   static HRenderBuffer mPickDepthColorBuffer;  // Browser only: RGBA-packed depth for picking
    static Vec2S mFBSize;                // The size of the frame-buffer
    static float[] mPickDepth = [];      // The depth buffer, obtained during a Pick render
+   static byte[] mPickDepthRaw = [];    // Browser only: the RGBA-packed depth read from Color1
    // This buffer contains the raw pixel-data obtained from a pick operation.
    // Since the models are drawn in 'false-color' mode during a pick operation, this buffer
    // effectively contains indices into the VModels list. Some finagling is required, such
@@ -398,7 +410,20 @@ public static partial class Lux {
                (mPickPixel, mPickDepth) = (new byte[size * 4], new float[size]);
             GL.PixelStore (EPixelStoreParam.PackAlignment, 4);
             GL.ReadPixels (0, 0, x, y, EPixelFormat.BGRA, EPixelType.UByte, mPickPixel);
-            GL.ReadPixels (0, 0, x, y, EPixelFormat.DepthComponent, EPixelType.Float, mPickDepth);
+            if (OperatingSystem.IsBrowser ()) {
+               // WebGL2 cannot read the depth buffer: decode the RGBA-packed depth that
+               // the ES Pick.frag wrote into color attachment 1 (see BeginRender)
+               if (mPickDepthRaw.Length < size * 4) mPickDepthRaw = new byte[size * 4];
+               GL.ReadBuffer (EFrameBufferAttachment.Color1);
+               GL.ReadPixels (0, 0, x, y, EPixelFormat.RGBA, EPixelType.UByte, mPickDepthRaw);
+               GL.ReadBuffer (EFrameBufferAttachment.Color0);
+               for (int i = 0; i < size; i++) {
+                  int j = i * 4;
+                  mPickDepth[i] = (mPickDepthRaw[j] + mPickDepthRaw[j + 1] / 255f
+                     + mPickDepthRaw[j + 2] / 65025f + mPickDepthRaw[j + 3] / 16581375f) / 255f;
+               }
+            } else
+               GL.ReadPixels (0, 0, x, y, EPixelFormat.DepthComponent, EPixelType.Float, mPickDepth);
             return (mPickPixel, mPickDepth);
       }
       return null;

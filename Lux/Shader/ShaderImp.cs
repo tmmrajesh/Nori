@@ -11,9 +11,9 @@ namespace Nori;
 class ShaderImp {
    // Constructor --------------------------------------------------------------
    /// <summary>Construct a pipeline given the code for the individual shaders</summary>
-   ShaderImp (string name, int sort, EMode mode, EVertexSpec vspec, string[] code, int blend, bool depthTest, bool polyOffset, EStencilBehavior stencil) {
-      (Name, SortCode, Mode, VSpec, Blending, DepthTest, PolygonOffset, StencilBehavior, Handle)
-         = (name, sort, mode, vspec, blend, depthTest, polyOffset, stencil, GL.CreateProgram ());
+   ShaderImp (string name, int sort, EMode mode, EVertexSpec vspec, string[] code, int blend, bool depthTest, bool polyOffset, EStencilBehavior stencil, int expand, int sub) {
+      (Name, SortCode, Mode, VSpec, Blending, DepthTest, PolygonOffset, StencilBehavior, Expand, Sub, Handle)
+         = (name, sort, mode, vspec, blend, depthTest, polyOffset, stencil, expand, sub, GL.CreateProgram ());
       code.ForEach (a => GL.AttachShader (Handle, sCache.Get (a, CompileShader)));
       GL.LinkProgram (Handle);
       string log2 = GL.GetProgramInfoLog (Handle);
@@ -61,6 +61,18 @@ class ShaderImp {
    public readonly EStencilBehavior StencilBehavior;
    /// <summary>Enable polygon-offset-fill when this program is used</summary>
    public readonly bool PolygonOffset;
+   /// <summary>WebGL2 only: vertices per instance for 'expanded' drawing (0 = draw normally)</summary>
+   /// The desktop pipelines use geometry shaders to expand lines and points into quads.
+   /// WebGL2 has no geometry stage, so those pipelines are drawn as instanced 4-vertex
+   /// triangle strips instead: each set of Expand vertices (2 for a line, 1 for a point)
+   /// becomes one instance, and the ES vertex shader positions the quad corners using
+   /// gl_VertexID. See RetainBuffer.Draw / StreamBuffer.Draw and NoriGL.js drawExpanded.
+   public readonly int Expand;
+   /// <summary>WebGL2 only: instances drawn per Expand-group of vertices (1 = one quad each)</summary>
+   /// The tessellation replacement: a bezier is Expand = 4 control points drawn as Sub = 64 instances,
+   /// one per potential segment, and the vertex shader decides per frame how many of them are
+   /// needed (Bezier2D.vert). The per-instance attributes then advance once every Sub instances.
+   public readonly int Sub;
    /// <summary>The sorting code for this (determines order in which batches are dispatched)</summary>
    public readonly int SortCode;
    /// <summary>The vertex-specification for this shader</summary>
@@ -191,7 +203,7 @@ class ShaderImp {
    // Compiles an individual shader, given the source file (this reuses already compiled
    // shaders where possible, since some shaders are part of multiple pipelines)
    static HShader CompileShader (string file) {
-      var text = Lib.ReadText ($"nori:GL/Shader/{file}");
+      var text = Lib.ReadText ($"{sShaderDir}{file}");
       var eShader = Enum.Parse<EShader> (Path.GetExtension (file)[1..], true);
       var shader = GL.CreateShader (eShader);
       GL.ShaderSource (shader, text);
@@ -207,9 +219,10 @@ class ShaderImp {
    // and builds it (that index contains the list of actual vertex / geometry / fragment
    // programs)
    static ShaderImp Load ([CallerMemberName] string name = "") {
-      sIndex ??= Lib.ReadLines ("nori:GL/Shader/Index.txt");
+      sIndex ??= Lib.ReadLines ($"{sShaderDir}Index.txt");
       // Each line in the index.txt contains these:
       // 0:Name  1:SortCode  2:Mode  3:VSpec  4:Blending  5:DepthTest  6:PolygonOffset  7:StencilBehavior  8:Programs
+      // The ES (WebGL2) index has two extra columns: 9:Expand and 10:Sub (see those properties above)
       foreach (var line in sIndex) {
          var w = line.Split (' ', StringSplitOptions.RemoveEmptyEntries);
          if (w.Length >= 9 && w[0] == name) {
@@ -219,12 +232,15 @@ class ShaderImp {
             int blending = w[4].ToInt (); bool depthtest = w[5] == "1", offset = w[6] == "1";
             var stencil = Enum.Parse<EStencilBehavior> (w[7], true);
             var programs = w[8].Split ('|');
-            return new (name, sort, mode, vspec, programs, blending, depthtest, offset, stencil);
+            int expand = w.Length >= 10 ? w[9].ToInt () : 0, sub = w.Length >= 11 ? w[10].ToInt () : 1;
+            return new (name, sort, mode, vspec, programs, blending, depthtest, offset, stencil, expand, sub);
          }
       }
-      throw new NotImplementedException ($"Shader {name} not found in Shader/Index.txt");
+      throw new NotImplementedException ($"Shader {name} not found in {sShaderDir}Index.txt");
    }
    static string[]? sIndex;
+   // On the browser we load the GLSL-ES 3.00 shader set (no geometry / tessellation stages)
+   static readonly string sShaderDir = OperatingSystem.IsBrowser () ? "nori:GL/ShaderES/" : "nori:GL/Shader/";
 
    // This is called exactly once in the application lifetime to make the line-type texture.
    // We store the different line-type patterns in a texture. The t coordinate is used to select

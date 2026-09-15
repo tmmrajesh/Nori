@@ -137,7 +137,7 @@ struct RBatch : IIndexed {
    static List<int> mStreaming = [];
 
    /// <summary>Extend this batch by a given number of extra vertices</summary>
-   public void Extend (int delta) => Count = (ushort)(Count + delta);
+   public void Extend (int delta) => Count += delta;
 
    /// <summary>Returns a reference to the nth RBatch (from the indexed list mAll of all batches)</summary>
    public static ref RBatch Get (int n) => ref mAll[n];
@@ -233,7 +233,7 @@ struct RBatch : IIndexed {
       if (ICount > 0) {
          // If we are using indexed drawing mode, we ignore the count that is passed
          // in, and use this.ICount as the number of elements to draw
-         buffer.Draw (shader.Pgm.Mode, Offset, IOffset, ICount);
+         buffer.Draw (shader.Pgm, Offset, IOffset, ICount);
       } else {
          // If ICount = 0: we are using simple DrawArrays.
          // We have to draw 'count' vertices starting at this batch's vertex
@@ -242,7 +242,7 @@ struct RBatch : IIndexed {
          // is because IssueAll() sees if this batch and the subsequent one(s)
          // all use the same shader, VAO and uniforms and thus can be merged into
          // a larger single draw.
-         buffer.Draw (shader.Pgm.Mode, Offset, count);
+         buffer.Draw (shader.Pgm, Offset, count);
       }
       // Update stats
       mVertsDrawn += count;

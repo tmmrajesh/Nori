@@ -69,15 +69,18 @@ class RetainBuffer : IIndexed {
    }
 
    /// <summary>Draws data from the VAO using a simple DrawArrays call</summary>
-   public void Draw (EMode mode, int offset, int count) {
+   /// On WebGL2, pipelines that used geometry shaders on the desktop (pgm.Expand > 0) are
+   /// drawn as instanced triangle strips instead - see ShaderImp.Expand for details.
+   public void Draw (ShaderImp pgm, int offset, int count) {
       PushToGPU ();
-      GL.DrawArrays (mode, offset / mcbVertex, count);
+      if (pgm.Expand > 0) GL.DrawExpanded (pgm.Expand, offset / mcbVertex, count, pgm.Sub);
+      else GL.DrawArrays (pgm.Mode, offset / mcbVertex, count);
    }
 
    /// <summary>Draws data from the VAO using a more complex DrawElements call (indexed drawing)</summary>
-   public void Draw (EMode mode, int offset, int ioffset, int icount) {
+   public void Draw (ShaderImp pgm, int offset, int ioffset, int icount) {
       PushToGPU ();
-      GL.DrawElementsBaseVertex (mode, icount, EIndexType.UInt, ioffset * 4, offset / mcbVertex);
+      GL.DrawElementsBaseVertex (pgm.Mode, icount, EIndexType.UInt, ioffset * 4, offset / mcbVertex);
    }
 
    /// <summary>Gets a currently open RetainBuffer corresponding to a given vertex-spec</summary>
@@ -220,8 +223,12 @@ class StreamBuffer {
 
       mCursor += cbReserve;
       if (shader.Name == "UIRect") GL.DrawArraysInstanced (shader.Mode, 0, 4, nVerts);
+      else if (shader.Expand > 0) GL.DrawExpanded (shader.Expand, 0, nVerts, shader.Sub);   // WebGL2 only
       else GL.DrawArrays (shader.Mode, 0, nVerts);
-      for (int i = 0; i < index; i++) GL.DisableVertexAttribArray (index);
+      for (int i = 0; i < index; i++) {
+         if (shader.Name == "UIRect") GL.VertexAttribDivisor (i, 0);   // Don't leak the divisor into later draws
+         GL.DisableVertexAttribArray (i);
+      }
       GL.BindBuffer (EBufferTarget.Array, HBuffer.Zero);
    }
 

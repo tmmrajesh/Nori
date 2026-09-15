@@ -39,6 +39,9 @@ public class TypeFace {
       InitFont (pixelSize);
    }
 
+   // Used by LoadAtlas (the pre-baked path needs no FreeType at all)
+   TypeFace () { }
+
    // Properties ---------------------------------------------------------------
    /// <summary>Returns the indices of all glyphs available in this font</summary>
    public IReadOnlyList<uint> AllGlyphs { get { _ = Map; return mAllGlyphs!; } }
@@ -65,11 +68,28 @@ public class TypeFace {
    FTEncoding[]? mEncodings;
 
    /// <summary>Returns an always-available default typeface (Roboto, 18px)</summary>
+   /// On the desktop this rasterizes the TTF with FreeType. On the browser (no native
+   /// FreeType) it loads the nearest pre-baked glyph atlas (see SaveAtlas / LoadAtlas,
+   /// baked offline by Tools/FontBake).
    public static TypeFace Default {
-      get => mDefault ??= new (Lib.ReadBytes ("nori:GL/Fonts/Roboto-Regular.ttf"), (int)(9 * Lux.DPIScale + 0.5));
+      get {
+         if (mDefault == null) {
+            int size = (int)(9 * Lux.DPIScale + 0.5);
+            if (OperatingSystem.IsBrowser ()) {
+               int baked = BakedSizes.MinBy (a => Math.Abs (a - size));
+               mDefault = LoadAtlas (Lib.ReadBytes ($"nori:GL/Fonts/Roboto-Regular-{baked}.atlas"));
+            } else
+               mDefault = new (Lib.ReadBytes ("nori:GL/Fonts/Roboto-Regular.ttf"), size);
+         }
+         return mDefault;
+      }
       set => mDefault = value;
    }
    static TypeFace? mDefault;
+
+   /// <summary>The pixel-sizes at which atlases are baked (by Tools/FontBake)</summary>
+   /// These cover the common devicePixelRatio values (1, 1.25, 1.5, 2, 3) at the 9px base size
+   public static readonly int[] BakedSizes = [9, 11, 14, 18, 27];
 
    /// <summary>Set the Gamma value to use when rasterizing the font</summary>
    /// Monitor gamma values range from 1.8 to 2.2 typically, so we pick 2.0 as a close-enough
@@ -146,9 +166,12 @@ public class TypeFace {
    /// The kerning adjustment is rounded to the nearest integer (since we cannot handle fractional
    /// pixel positionings of glyphs)
    public int GetKerning (uint idx0, uint idx1) {
+      // The atlas-loaded path uses a pre-baked table of (nonzero) kern pairs
+      if (mKern != null) return mKern.TryGetValue (((ulong)idx0 << 32) | idx1, out var kern) ? kern : 0;
       GetCharKerning (mFace, idx0, idx1, 0, out var kerning);
       return (int)kerning.X.Value;
    }
+   Dictionary<ulong, short>? mKern;
 
    /// <summary>Get metrics data for a given character</summary>
    public ref Metrics GetMetrics (char ch) => ref GetMetrics (GetGlyphIndex (ch));
@@ -220,6 +243,71 @@ public class TypeFace {
    internal void SetEncoding (FTEncoding encoding)
       => Check (FreeType.FreeType.SetEncoding (mFace, encoding));
 
+   /// <summary>Serializes this typeface into a 'pre-baked atlas' (desktop only, uses FreeType)</summary>
+   /// The atlas contains everything the renderer needs at runtime - glyph metrics, the
+   /// char-to-glyph map, the (nonzero) kerning pairs and the gamma-corrected coverage
+   /// texture - so that LoadAtlas can reconstruct a fully working TypeFace with no native
+   /// code. This is how text works on browser-wasm, where FreeType is not available.
+   /// Call this before the Texture property is read (building the GL texture discards the
+   /// raw texture data this needs).
+   public void SaveAtlas (Stream stm) {
+      _ = Notes;     // Builds mNotes and mRawTexData
+      var bw = new BinaryWriter (stm);
+      bw.Write ("NGA1"u8);
+      bw.Write (mPixelSize.X); bw.Write (mPixelSize.Y);
+      bw.Write (mLineHeight); bw.Write (mAscender); bw.Write (mDescender);
+      var notes = mNotes!;
+      bw.Write (notes.Length);
+      foreach (var m in notes) {
+         bw.Write (m.Rows); bw.Write (m.Columns); bw.Write (m.LeftBearing);
+         bw.Write (m.TopBearing); bw.Write (m.Advance); bw.Write (m.TexOffset);
+      }
+      _ = Map;
+      bw.Write (mMap!.Count);
+      foreach (var (ch, glyph) in mMap) { bw.Write ((ushort)ch); bw.Write (glyph); }
+      // Gather the nonzero kerning pairs over all glyphs (sparse: a few thousand for
+      // a typical font, versus millions of possible pairs)
+      List<(uint A, uint B, short K)> kerns = [];
+      var glyphs = mAllGlyphs!;
+      foreach (var a in glyphs)
+         foreach (var b in glyphs) {
+            int k = GetKerning (a, b);
+            if (k != 0) kerns.Add ((a, b, (short)k));
+         }
+      bw.Write (kerns.Count);
+      foreach (var (a, b, k) in kerns) { bw.Write (a); bw.Write (b); bw.Write (k); }
+      bw.Write (mRawTexData!.Length);
+      bw.Write (mRawTexData);
+   }
+
+   /// <summary>Reconstructs a TypeFace from a pre-baked atlas (see SaveAtlas) - fully managed</summary>
+   public static TypeFace LoadAtlas (byte[] data) {
+      var br = new BinaryReader (new MemoryStream (data, writable: false));
+      if (!br.ReadBytes (4).AsSpan ().SequenceEqual ("NGA1"u8))
+         throw new IOException ("Not a Nori glyph atlas");
+      TypeFace tf = new ();
+      tf.mPixelSize = (br.ReadInt32 (), br.ReadInt32 ());
+      tf.mLineHeight = br.ReadInt32 (); tf.mAscender = br.ReadInt32 (); tf.mDescender = br.ReadInt32 ();
+      int cNotes = br.ReadInt32 ();
+      tf.mNotes = new Metrics[cNotes];
+      for (int i = 0; i < cNotes; i++)
+         tf.mNotes[i] = new Metrics (br.ReadInt16 (), br.ReadInt16 (), br.ReadInt16 (),
+                                     br.ReadInt16 (), br.ReadInt16 (), br.ReadInt32 ());
+      int cMap = br.ReadInt32 ();
+      tf.mMap = new Dictionary<char, uint> (cMap);
+      for (int i = 0; i < cMap; i++) tf.mMap[(char)br.ReadUInt16 ()] = br.ReadUInt32 ();
+      tf.mAllGlyphs = [.. tf.mMap.Values.Distinct ()];
+      int cKern = br.ReadInt32 ();
+      tf.mKern = new Dictionary<ulong, short> (cKern);
+      for (int i = 0; i < cKern; i++) {
+         ulong key = ((ulong)br.ReadUInt32 () << 32) | br.ReadUInt32 ();
+         tf.mKern[key] = br.ReadInt16 ();
+      }
+      tf.mRawTexData = br.ReadBytes (br.ReadInt32 ());
+      tf.mUID = ++sNextUID;
+      return tf;
+   }
+
    // Implementation -----------------------------------------------------------
    // Called whenever the font size is changed
    void Bump () {
@@ -238,6 +326,12 @@ public class TypeFace {
       GL.PixelStore (EPixelStoreParam.UnpackAlignment, 1);
       byte[] texData = mRawTexData!;
       GL.TexImage2D (ETexTarget.TexRectangle, EPixelInternalFormat.Red, CXTex, texData.Length / CXTex, EPixelFormat.Red, EPixelType.UByte, texData);
+      if (OperatingSystem.IsBrowser ()) {
+         // On WebGL2 the target maps to TEXTURE_2D, whose default MIN_FILTER expects
+         // mipmaps - without explicit filters the texture is incomplete and samples black
+         GL.TexParameter (ETexTarget.TexRectangle, ETexParam.MinFilter, (int)ETexFilter.Nearest);
+         GL.TexParameter (ETexTarget.TexRectangle, ETexParam.MagFilter, (int)ETexFilter.Nearest);
+      }
       mRawTexData = null;
       return texture;
    }
@@ -251,7 +345,7 @@ public class TypeFace {
    }
 
    public override string ToString ()
-      => $"{mRec.FamilyName.ToUTF8 ()} {mRec.StyleName.ToUTF8 ()}";
+      => mKern != null ? $"TypeFace (atlas, {mPixelSize.X}px)" : $"{mRec.FamilyName.ToUTF8 ()} {mRec.StyleName.ToUTF8 ()}";
 
    // Returns the Glyph structure for a particular glyph index
    internal Glyph GetGlyph (uint glyphIdx) {
@@ -351,6 +445,11 @@ public class TypeFace {
          (LeftBearing, TopBearing) = ((short)g.LeftBearing, (short)g.TopBearing);
          TexOffset = texOffset;
       }
+
+      // Used when deserializing a pre-baked atlas (see TypeFace.LoadAtlas)
+      internal Metrics (short rows, short columns, short leftBearing, short topBearing, short advance, int texOffset)
+         => (Rows, Columns, LeftBearing, TopBearing, Advance, TexOffset)
+          = (rows, columns, leftBearing, topBearing, advance, texOffset);
 
       /// <summary>Rows and Columns of the bitmap</summary>
       public readonly short Rows, Columns;
