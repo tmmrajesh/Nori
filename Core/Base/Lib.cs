@@ -118,7 +118,7 @@ public static class Lib {
 
       // Helpers ..............................
       static string? GetLocation (Assembly? asm)
-         => asm == null ? null : new Uri (asm.Location).LocalPath;
+         => asm == null || asm.Location.IsBlank () ? null : new Uri (asm.Location).LocalPath;
    }
    static string? sCodeBase;
 
@@ -140,8 +140,12 @@ public static class Lib {
    public static void Init () {
       if (!sInited) {
          sInited = true;
-         var file = GetLocalFile ("Nori.wad");
-         Register (File.Exists (file) ? new ZipStmLocator ("nori:", file) : new FileStmLocator ("nori:", $"{DevRoot}/Wad/"));
+         // A browser (WASM) has no disk to find a wad on: the application fetches Nori.wad over
+         // HTTP and mounts it with a MemZipStmLocator before calling Init (see Demos/WebShell)
+         if (!OperatingSystem.IsBrowser ()) {
+            var file = GetLocalFile ("Nori.wad");
+            Register (File.Exists (file) ? new ZipStmLocator ("nori:", file) : new FileStmLocator ("nori:", $"{DevRoot}/Wad/"));
+         }
          AddAssembly (Assembly.GetExecutingAssembly ());
          AddNamespace ("Nori"); AddNamespace ("System"); AddNamespace ("System.Collections.Generic");
       }

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Nori.Core / Nori.Lux target plain net10.0; their browser-only paths are guarded at
+         runtime (OperatingSystem.IsBrowser), which the platform analyzer cannot see -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <!-- No OutDir into Bin: a WASM app is a tree of framework files and static assets, not
+         one assembly, and does not belong in the folder the desktop binaries share -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Nori.Core.csproj" />
+    <ProjectReference Include="..\..\Lux\Nori.Lux.csproj" />
+    <ProjectReference Include="..\..\Host\Web\Nori.Host.Web.csproj" />
+  </ItemGroup>
+
+  <!-- Nori's resource data (fonts, shaders, line-fonts ...) lives in the Wad folder on a developer
+       machine and in a Nori.wad zip beside a deployed EXE. A browser can use neither: it fetches
+       one file over HTTP and mounts it with MemZipStmLocator (see Program.cs). So the Wad folder
+       is zipped into wwwroot at build time (under 1 MB, small next to the WASM runtime) -->
+  <Target Name="PackNoriWad" BeforeTargets="BeforeBuild">
+    <ZipDirectory SourceDirectory="$(ProjectDir)..\..\Wad" DestinationFile="$(ProjectDir)wwwroot\Nori.wad" Overwrite="true" />
+  </Target>
+
+</Project>

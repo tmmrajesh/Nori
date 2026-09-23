@@ -1,0 +1,2 @@
+# Zipped into wwwroot at build time from the Wad folder (PackNoriWad target in WebShell.csproj)
+/wwwroot/Nori.wad

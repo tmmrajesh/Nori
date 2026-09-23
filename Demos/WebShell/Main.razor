@@ -1,0 +1,34 @@
+@*
+   Main.razor ~ the one page of WebShell: a Nori canvas filling the browser window.
+
+   Lux owns the canvas: the JS host (NoriHost.js in Nori.Host.Web) creates the WebGL2 context on
+   it, watches it for resize and runs the paint loop. Blazor never touches its contents. The
+   canvas sits in a positioned wrapper so it is exactly the size of the wrapper (a canvas sized by
+   flex and by width:100% ends up bigger than its share).
+*@
+<div class="shell">
+   <div class="view"><canvas id="nori-canvas" tabindex="0"></canvas></div>
+   @if (mError != null) { <div class="error">@mError</div> }
+</div>
+
+@code {
+   /// <summary>Brings Lux up on the canvas, once the canvas is in the page</summary>
+   /// Nothing that builds a scene can run before this: constructing one talks to the renderer.
+   protected override async Task OnAfterRenderAsync (bool first) {
+      if (!first) return;
+      try {
+         await WebHost.Init ("nori-canvas", OnReady, new Color4 (128, 96, 64));
+      } catch (Exception e) {
+         mError = $"Nori could not start: {e.Message}";
+         StateHasChanged ();
+      }
+   }
+
+   // Same as GLShell: pan/zoom with the mouse, then show the welcome scene
+   void OnReady () {
+      new SceneManipulator ();
+      Lux.UIScene = new DemoScene ();
+   }
+
+   string? mError;
+}
