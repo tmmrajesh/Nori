@@ -17,22 +17,26 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The scenes: the same assembly WPFDemo draws with -->
+    <ProjectReference Include="..\DemoScenes\DemoScenes.csproj" />
     <ProjectReference Include="..\..\Core\Nori.Core.csproj" />
     <ProjectReference Include="..\..\Lux\Nori.Lux.csproj" />
+    <!-- The browser host: WebGL2 on a canvas, DOM events into Nori's Hub, the JS paint loop -->
     <ProjectReference Include="..\..\Host\Web\Nori.Host.Web.csproj" />
   </ItemGroup>
 
-  <!-- Nori's resource data (fonts, shaders, line-fonts ...) lives in the Wad folder on a developer
-       machine and in a Nori.wad zip beside a deployed EXE. A browser can use neither: it fetches
-       one file over HTTP and mounts it with MemZipStmLocator (see Program.cs). So the Wad folder
-       is zipped into wwwroot at build time (under 1 MB, small next to the WASM runtime) -->
-  <Target Name="PackNoriWad" BeforeTargets="ResolveProjectStaticWebAssets;BeforeBuild">
+  <!-- A browser has no file system, so everything the app reads is fetched over HTTP as a zip
+       and mounted with MemZipStmLocator (see Program.cs). Two wads are packed into wwwroot at
+       build time: Nori.wad (fonts, shaders, line-fonts ... from the Wad folder) and Demo.wad
+       (the demo inputs from Demos/Data, served as the "demo:" drive). Both are gitignored. -->
+  <Target Name="PackWads" BeforeTargets="ResolveProjectStaticWebAssets;BeforeBuild">
     <ZipDirectory SourceDirectory="$(ProjectDir)..\..\Wad" DestinationFile="$(ProjectDir)wwwroot\Nori.wad" Overwrite="true" />
-    <!-- The wwwroot glob was evaluated before this target ran, so on a first build (no wad yet)
-         the file would be missing from the static-asset manifest and 404 at runtime. Add it
-         here, unless the glob already picked it up. -->
+    <ZipDirectory SourceDirectory="$(ProjectDir)..\Data" DestinationFile="$(ProjectDir)wwwroot\Demo.wad" Overwrite="true" />
+    <!-- The wwwroot glob was evaluated before this target ran, so on a first build (no wads yet)
+         the files would be missing from the static-asset manifest and 404 at runtime. Add them
+         here, skipping any the glob already picked up. -->
     <ItemGroup>
-      <Content Include="wwwroot\Nori.wad" Exclude="@(Content)" />
+      <Content Include="wwwroot\Nori.wad;wwwroot\Demo.wad" Exclude="@(Content)" />
     </ItemGroup>
   </Target>
 

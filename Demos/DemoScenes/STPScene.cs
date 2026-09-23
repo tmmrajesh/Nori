@@ -1,0 +1,31 @@
+﻿// ────── ╔╗
+// ╔═╦╦═╦╦╬╣ STPScene.cs
+// ║║║║╬║╔╣║ Load and display a STEP file, select entities, connected entities
+// ╚╩═╩═╩╝╚╝ ───────────────────────────────────────────────────────────────────────────────────────
+namespace DemoScenes;
+using System.Reactive.Linq;
+using Nori;
+
+public class STPScene : Scene3 {
+   public STPScene () {
+      var sr = new STEPReader ("demo:Step/S00178.stp");
+      mModel = sr.Load ();
+ 
+      Lib.Tracer = TraceVN.Print;
+      BgrdColor = Color4.Gray (96);
+      Bound = mModel.Bound;
+      Root = new GroupVN ([new Model3VN (mModel), TraceVN.It]);
+   }
+   Model3 mModel;
+
+   public override void Picked (object obj) {
+      var kbd = Hub.Keyboard;
+      if (!kbd.IsShiftDown) mModel.Ents.ForEach (a => a.IsSelected = false);
+      if (obj is E3Surface ent) {
+         Lib.Trace ($"Picked: {ent.GetType ().Name} #{ent.Id}");
+         ent.IsSelected = true;
+         if (kbd.IsCtrlDown)
+            foreach (var ent2 in mModel.GetNeighbors (ent)) ent2.IsSelected = true;
+      }
+   }
+}

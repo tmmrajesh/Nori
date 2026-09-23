@@ -72,20 +72,23 @@ public class TypeFace {
    /// FreeType) it loads the nearest pre-baked glyph atlas (see SaveAtlas / LoadAtlas,
    /// baked offline by Tools/FontBake).
    public static TypeFace Default {
-      get {
-         if (mDefault == null) {
-            int size = (int)(9 * Lux.DPIScale + 0.5);
-            if (OperatingSystem.IsBrowser ()) {
-               int baked = BakedSizes.MinBy (a => Math.Abs (a - size));
-               mDefault = LoadAtlas (Lib.ReadBytes ($"nori:GL/Fonts/Roboto-Regular-{baked}.atlas"));
-            } else
-               mDefault = new (Lib.ReadBytes ("nori:GL/Fonts/Roboto-Regular.ttf"), size);
-         }
-         return mDefault;
-      }
+      get => mDefault ??= Load ("Roboto-Regular", (int)(9 * Lux.DPIScale + 0.5));
       set => mDefault = value;
    }
    static TypeFace? mDefault;
+
+   /// <summary>Loads one of the wad fonts (like "Roboto-Regular") at a given pixel size</summary>
+   /// This is the host-neutral way to get a TypeFace. On the desktop it rasterizes the TTF from
+   /// nori:GL/Fonts with FreeType at exactly that size. On the browser (no native FreeType) it
+   /// loads the pre-baked glyph atlas whose size is nearest to the one asked for (see
+   /// BakedSizes, and Tools/FontBake which bakes them), so the size may be off by a little.
+   public static TypeFace Load (string name, int size) {
+      if (OperatingSystem.IsBrowser ()) {
+         int baked = BakedSizes.MinBy (a => Math.Abs (a - size));
+         return LoadAtlas (Lib.ReadBytes ($"nori:GL/Fonts/{name}-{baked}.atlas"));
+      }
+      return new (Lib.ReadBytes ($"nori:GL/Fonts/{name}.ttf"), size);
+   }
 
    /// <summary>The pixel-sizes at which atlases are baked (by Tools/FontBake)</summary>
    /// These cover the common devicePixelRatio values (1, 1.25, 1.5, 2, 3) at the 9px base size

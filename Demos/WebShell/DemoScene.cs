@@ -8,8 +8,8 @@ namespace WebShell;
 // class DemoScene ---------------------------------------------------------------------------------
 class DemoScene : Scene2 {
    public DemoScene () {
-      // No FreeType in the browser: use the largest pre-baked Roboto atlas (see Tools/FontBake)
-      mFace = TypeFace.LoadAtlas (Lib.ReadBytes ("nori:GL/Fonts/Roboto-Regular-27.atlas"));
+      // TypeFace.Load picks the nearest pre-baked atlas in the browser (no FreeType there)
+      mFace = TypeFace.Load ("Roboto-Regular", (int)(48 * Lux.DPIScale));
       Bound = new Bound2 (0, 0, 100, 50);
       BgrdColor = new Color4 (128, 96, 64);
 

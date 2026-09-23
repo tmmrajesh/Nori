@@ -1,0 +1,4 @@
+# Zipped into wwwroot at build time (PackWads target in WebDemo.csproj):
+# Nori.wad from the Wad folder, Demo.wad from Demos/Data
+/wwwroot/Nori.wad
+/wwwroot/Demo.wad

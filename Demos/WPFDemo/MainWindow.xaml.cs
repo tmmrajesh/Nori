@@ -10,7 +10,7 @@ namespace WPFDemo;
 // class MainWindow --------------------------------------------------------------------------------
 public partial class MainWindow : Window {
    public MainWindow () {
-      Lib.Init ();
+      DemoLib.Init ();
       InitializeComponent ();
       mContent.Child = WPFHost.Init (this, OnLuxReady);
    }

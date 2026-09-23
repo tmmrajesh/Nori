@@ -11,9 +11,11 @@
 
   <ItemGroup>
     <Compile Remove="BooleanDemo.cs" />
+    <Using Include="DemoScenes" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\DemoScenes\DemoScenes.csproj" />
     <ProjectReference Include="..\..\Core\Nori.Core.csproj" />
     <ProjectReference Include="..\..\Host\GLU\Nori.GLU.csproj" />
     <ProjectReference Include="..\..\Host\WPF\Nori.Host.WPF.csproj" />

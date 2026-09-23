@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutDir>..\..\Bin</OutDir>
+    <!-- Host-neutral demo scenes, shared by WPFDemo (desktop) and WebDemo (browser). Nothing in
+         here may reference WPF or touch the file system directly: data comes in through Lib's
+         IStmLocator service as "demo:" resources (see DemoLib) -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Nori.Core.csproj" />
+    <ProjectReference Include="..\..\Host\GLU\Nori.GLU.csproj" />
+    <ProjectReference Include="..\..\Lux\Nori.Lux.csproj" />
+  </ItemGroup>
+
+</Project>

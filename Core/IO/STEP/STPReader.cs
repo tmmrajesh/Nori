@@ -10,7 +10,13 @@ namespace Nori;
 public partial class STEPReader {
    // Constructors -------------------------------------------------------------
    /// <summary>Intialize a STEP reader given a filename</summary>
-   public STEPReader (string file) => (S, mFile) = (File.ReadAllText (file), file);
+   /// The file is opened through the IStmLocator service, so as well as a plain path this
+   /// accepts a virtual-drive name like "demo:Step/S00178.stp" (needed in the browser, which
+   /// has no file system)
+   public STEPReader (string file) {
+      using var reader = new StreamReader (Lib.OpenRead (file));
+      (S, mFile) = (reader.ReadToEnd (), file);
+   }
 
    // Entity switch ------------------------------------------------------------
    // Each time this is called, this reads and returns one entity from the file

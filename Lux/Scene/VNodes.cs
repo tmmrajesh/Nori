@@ -116,7 +116,7 @@ public partial class TraceVN : VNode {
    TypeFace Face {
       get {
          if (mFace == null) {
-            mFace = new (Lib.ReadBytes ("nori:GL/Fonts/RobotoMono-Regular.ttf"), 16);
+            mFace = TypeFace.Load ("RobotoMono-Regular", 16);
             mDYLine = mFace.LineHeight;
             mTimer = Hub.Dispatcher.Timer (TimeSpan.FromSeconds (1), true, OnTick);
          }

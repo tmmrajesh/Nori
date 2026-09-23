@@ -1,0 +1,81 @@
+@*
+   Main.razor ~ the one page of WebDemo, laid out like WPFDemo's main window: a column of scene
+   buttons on the left and the Nori canvas filling the rest.
+
+   Lux owns the canvas: the JS host (NoriHost.js in Nori.Host.Web) creates the WebGL2 context on
+   it, watches it for resize and runs the paint loop. Blazor never touches its contents. The
+   canvas sits in a positioned wrapper so it is exactly the size of the wrapper (a canvas sized by
+   flex and by width:100% ends up bigger than its share).
+*@
+<div class="shell">
+   <div class="panel">
+      @foreach (var demo in mDemos) {
+         <button class="@(demo == mCurrent ? "sel" : "")" disabled="@(!mReady)"
+                 @onclick="() => Display (demo)">@demo.Name</button>
+      }
+      @if (mStatus != null) { <p class="status">@mStatus</p> }
+      @if (mError != null) { <p class="error">@mError</p> }
+   </div>
+   <div class="view"><canvas id="nori-canvas" tabindex="0"></canvas></div>
+</div>
+
+@code {
+   [Inject] HttpClient Http { get; set; } = null!;
+
+   // One entry per button, in the order WPFDemo lists them. The factory runs when the button is
+   // clicked, so a scene's data is only read (and its geometry only built) when it is shown
+   record Demo (string Name, Func<Scene> Make, bool BackFacesPink = false);
+
+   readonly Demo[] mDemos = [
+      new ("Tessellation", () => new MeshScene ()),
+      new ("Load DXF", () => new DwgScene ()),
+      new ("Load STEP", () => new STPScene (), BackFacesPink: true),
+   ];
+   Demo? mCurrent;
+   bool mReady;               // Lux is up and the "demo:" drive is mounted: scenes can be shown
+   string? mStatus, mError;
+
+   /// <summary>Brings Lux up on the canvas, once the canvas is in the page</summary>
+   /// Nothing that builds a scene can run before this: constructing one talks to the renderer.
+   protected override async Task OnAfterRenderAsync (bool first) {
+      if (!first) return;
+      try {
+         await WebHost.Init ("nori-canvas", OnLuxReady, Color4.Gray (96));
+         await MountDemoData ();
+      } catch (Exception e) {
+         mError = $"Nori could not start: {e.Message}";
+         StateHasChanged ();
+      }
+   }
+
+   // Same as WPFDemo's OnLuxReady: trace text in yellow, pan / zoom / rotate with the mouse
+   void OnLuxReady () {
+      TraceVN.TextColor = Color4.Yellow;
+      new SceneManipulator ();
+   }
+
+   /// <summary>Fetches Demo.wad and mounts it as the "demo:" drive the scenes load from</summary>
+   /// This is the browser side of DemoLib: on the desktop "demo:" maps to the Demos/Data folder,
+   /// here it is a zip of that folder fetched over HTTP. It is a few MB, so it is fetched after
+   /// the page is up (with the buttons disabled meanwhile) rather than before anything shows.
+   async Task MountDemoData () {
+      mStatus = "Loading demo data ..."; StateHasChanged ();
+      Lib.Register (new MemZipStmLocator ("demo:", await Wads.Fetch (Http, "Demo.wad")));
+      mStatus = null; mReady = true; StateHasChanged ();
+   }
+
+   // Same as WPFDemo's Display: clear the trace, swap the scene, pink back-faces for B-rep models
+   void Display (Demo demo) {
+      try {
+         TraceVN.It.Clear ();
+         Lux.BackFacesPink = demo.BackFacesPink;
+         var sw = System.Diagnostics.Stopwatch.StartNew ();
+         var scene = demo.Make ();
+         Console.WriteLine ($"WebDemo: {demo.Name} scene built in {sw.ElapsedMilliseconds} ms");
+         Lux.UIScene = scene;
+         mCurrent = demo; mError = null;
+      } catch (Exception e) {
+         mError = $"{demo.Name}: {e.Message}";
+      }
+   }
+}
