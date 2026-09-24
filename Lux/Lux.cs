@@ -138,12 +138,14 @@ public static partial class Lux {
       Vec2S local = new (pos.X - scene.Rect.Left, pos.Y - scene.Rect.Top);
       int index = (viewport.Y - local.Y - 1) * viewport.X + local.X;
       if (index < 0 || index >= mPickDepth.Length) return null;
-      float fDepth = mPickDepth[index];
+      bool web = OperatingSystem.IsBrowser ();
+      float fDepth = web ? DecodePickDepth (index) : mPickDepth[index];
 
       // Now, abandon the LSB 2 bits of r, g and b leaving only 6 bits each (this is to
-      // avoid round off errors in low-bit depth color buffers
+      // avoid round off errors in low-bit depth color buffers. The browser reads the pick
+      // buffer as RGBA, the desktop as BGRA)
       index *= 4;
-      int b = mPickPixel[index] >> 2, g = mPickPixel[index + 1] >> 2, r = mPickPixel[index + 2] >> 2;
+      int b = mPickPixel[index + (web ? 2 : 0)] >> 2, g = mPickPixel[index + 1] >> 2, r = mPickPixel[index + (web ? 0 : 2)] >> 2;
       int vnodeId = r + (g << 6) + (b << 12);
       VNode? node = VNode.SafeGet (vnodeId);
       if (node != null) mPickPos = scene.Unproject (pos, fDepth);
@@ -363,6 +365,12 @@ public static partial class Lux {
    static Vec2S mFBSize;                // The size of the frame-buffer
    static float[] mPickDepth = [];      // The depth buffer, obtained during a Pick render
    static byte[] mPickDepthRaw = [];    // Browser only: the RGBA-packed depth read from Color1
+   // Browser only: unpacks the depth of pixel i from mPickDepthRaw (inverse of Pick.frag's packing)
+   static float DecodePickDepth (int i) {
+      int j = i * 4;
+      return (mPickDepthRaw[j] + mPickDepthRaw[j + 1] / 255f
+         + mPickDepthRaw[j + 2] / 65025f + mPickDepthRaw[j + 3] / 16581375f) / 255f;
+   }
    // This buffer contains the raw pixel-data obtained from a pick operation.
    // Since the models are drawn in 'false-color' mode during a pick operation, this buffer
    // effectively contains indices into the VModels list. Some finagling is required, such
@@ -409,21 +417,21 @@ public static partial class Lux {
             if (size > mPickDepth.Length)
                (mPickPixel, mPickDepth) = (new byte[size * 4], new float[size]);
             GL.PixelStore (EPixelStoreParam.PackAlignment, 4);
-            GL.ReadPixels (0, 0, x, y, EPixelFormat.BGRA, EPixelType.UByte, mPickPixel);
             if (OperatingSystem.IsBrowser ()) {
-               // WebGL2 cannot read the depth buffer: decode the RGBA-packed depth that
-               // the ES Pick.frag wrote into color attachment 1 (see BeginRender)
+               // WebGL2 reads RGBA natively (BGRA would be swizzled in JS, pixel by pixel), and
+               // cannot read the depth buffer: the ES Pick.frag writes the depth RGBA-packed into
+               // color attachment 1 (see BeginRender). That is kept raw and only the picked pixel
+               // is decoded (DecodePickDepth): decoding the whole frame on every pick took
+               // hundreds of ms at 4K on the WASM interpreter, stalling each mouse press
+               GL.ReadPixels (0, 0, x, y, EPixelFormat.RGBA, EPixelType.UByte, mPickPixel);
                if (mPickDepthRaw.Length < size * 4) mPickDepthRaw = new byte[size * 4];
                GL.ReadBuffer (EFrameBufferAttachment.Color1);
                GL.ReadPixels (0, 0, x, y, EPixelFormat.RGBA, EPixelType.UByte, mPickDepthRaw);
                GL.ReadBuffer (EFrameBufferAttachment.Color0);
-               for (int i = 0; i < size; i++) {
-                  int j = i * 4;
-                  mPickDepth[i] = (mPickDepthRaw[j] + mPickDepthRaw[j + 1] / 255f
-                     + mPickDepthRaw[j + 2] / 65025f + mPickDepthRaw[j + 3] / 16581375f) / 255f;
-               }
-            } else
+            } else {
+               GL.ReadPixels (0, 0, x, y, EPixelFormat.BGRA, EPixelType.UByte, mPickPixel);
                GL.ReadPixels (0, 0, x, y, EPixelFormat.DepthComponent, EPixelType.Float, mPickDepth);
+            }
             return (mPickPixel, mPickDepth);
       }
       return null;
